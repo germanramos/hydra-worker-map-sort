@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+# Set REPOSITORY with your repository name
+REPOSITORY=hydra-worker-pong
+
+if [ ! -h src/github.com/innotech/$REPOSITORY ]; then
+	mkdir -p src/github.com/innotech/
+	ln -s ../../.. src/github.com/innotech/$REPOSITORY
+fi
+
+export GOBIN=${PWD}/bin
+#export GOPATH=${PWD}
+
+go install -tags zmq_3_x
+go install github.com/innotech/$REPOSITORY
