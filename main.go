@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
-	// "log"
+	// "encoding/json"
 	"os"
 
-	worker "github.com/innotech/hydra-worker-pong/vendors/github.com/innotech/hydra-worker-lib"
+	worker "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib"
 )
 
 func main() {
@@ -16,26 +15,27 @@ func main() {
 	serviceName := os.Args[2] // e.g. map-sort
 	verbose := len(os.Args) >= 4 && os.Args[3] == "-v"
 
-	// New Worker connected to Hydra Load Balancer
+	// New Map and Sort Worker connected to Hydra Load Balancer
 	mapAndSortWorker := worker.NewWorker(serverAddr, serviceName, verbose)
-	fn := func(instances []map[string]interface{}, args map[string]string) []interface{} {
-		mappedInstances = make(map[string]interface{})
-		for _, instance := range instances {
-			if val, ok := mappedInstances[instance[args["mapAttr"]]]; ok {
-				mappedIstances[instance[args["mapAttr"]]] = append(mappedIstances[instance[args["mapAttr"]]], instance)
+	fn := func(instances []interface{}, args map[string]interface{}) []interface{} {
+		var mappedInstances map[string][]interface{}
+		mappedInstances = make(map[string][]interface{})
+		for _, i := range instances {
+			instance := i.(map[string]interface{})
+			key := instance["Info"].(map[string]interface{})[args["mapAttr"].(string)].(string)
+			if len(mappedInstances[key]) == 0 {
+				mappedInstances[key] = make([]interface{}, 0)
+			}
+			if _, ok := mappedInstances[key]; ok {
+				mappedInstances[key] = append(mappedInstances[key], instance)
 			} else {
-				mappedIstances[instance[args["mapAttr"]]] = []interface{}{instance}
+				mappedInstances[key] = []interface{}{instance}
 			}
 		}
 
-		var mapSort []string
-		if err := json.Unmarshal(args["mapSort"], &mapSort); err != nil {
-			// TODO: process error
-		}
-
 		computedInstances := make([]interface{}, 0)
-		for _, mapAttr := range mapSort {
-			computedInstances = append(computedInstances, mappedInstances[mapAttr])
+		for _, mapAttr := range args["mapSort"].(map[string]interface{}) {
+			computedInstances = append(computedInstances, mappedInstances[mapAttr.(string)])
 		}
 
 		return computedInstances

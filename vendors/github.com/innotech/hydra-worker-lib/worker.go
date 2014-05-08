@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	zmq "github.com/innotech/hydra/vendors/github.com/alecthomas/gozmq"
 	"log"
+	"reflect"
 	"time"
 	// DEBUG
 	"fmt"
@@ -22,7 +23,7 @@ const (
 type Worker interface {
 	close()
 	recv([][]byte) [][]byte
-	Run(func([]map[string]interface{}, map[string]string) []interface{})
+	Run(func([]interface{}, map[string]interface{}) []interface{})
 }
 
 type lbWorker struct {
@@ -80,7 +81,6 @@ func (self *lbWorker) sendToBroker(command string, option []byte, msg [][]byte) 
 	msg = append([][]byte{nil, []byte(command)}, msg...)
 	if self.verbose {
 		log.Printf("Sending %X to broker\n", command)
-		//Dump(msg)
 	}
 	self.worker.SendMultipart(msg, 0)
 }
@@ -93,21 +93,16 @@ func (self *lbWorker) close() {
 }
 
 func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
-
-	Dump(reply)
 	//  Format and send the reply if we were provided one
 	if len(reply) == 0 && self.expectReply {
 		panic("Error reply")
 	}
-	log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ******************************** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
 	if len(reply) > 0 {
 		if len(self.replyTo) == 0 {
 			panic("Error replyTo")
 		}
 		reply = append([][]byte{self.replyTo, nil}, reply...)
-		log.Println("SENDING TO BROKER >>>>>>>>>>>>")
-		Dump(reply)
 		self.sendToBroker(SIGNAL_REPLY, nil, reply)
 	}
 
@@ -123,51 +118,30 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 			panic(err) //  Interrupted
 		}
 
-		log.Printf("RECV %d", len(items))
-		log.Printf("RECV items[0] %d", items[0])
-		log.Printf("RECV POLLIN %d", items[0].REvents&zmq.POLLIN)
-
 		if item := items[0]; item.REvents&zmq.POLLIN != 0 {
-
-			log.Printf("RECV2 %d", len(items))
-
 			msg, _ = self.worker.RecvMultipart(0)
-
-			log.Printf("RECV3 %d", len(msg))
-
 			if self.verbose {
-				log.Println("Received message from broker: ")
-				//Dump(msg)
+				log.Println("Received message from broker")
 			}
 			self.liveness = HEARTBEAT_LIVENESS
-			Dump(msg)
 			if len(msg) < 2 {
 				panic("Invalid msg") //  Interrupted
 			}
 
 			switch command := string(msg[1]); command {
 			case SIGNAL_REQUEST:
-				log.Printf("Signal REQUEST received")
 				//  We should pop and save as many addresses as there are
 				//  up to a null part, but for now, just save one...
-				log.Println("PRE REQUEST FROM WORKER")
-				Dump(msg)
 				self.replyTo = msg[2]
-				log.Println("REPLY TO: " + string(self.replyTo))
 				msg = msg[4:6]
-				log.Println("DUMP 2")
-				Dump(msg)
-				log.Println("END DUMP")
 				return
 			case SIGNAL_HEARTBEAT:
-				log.Printf("Signal HEARBEAT received")
 				// do nothin
 			case SIGNAL_DISCONNECT:
-				log.Printf("Signal DISCONNECT received")
 				self.reconnectToBroker()
 			default:
-				log.Println("Invalid input message:")
-				//Dump(msg)
+				// TODO: catch error
+				log.Println("Invalid input message")
 			}
 		} else if self.liveness--; self.liveness <= 0 {
 			if self.verbose {
@@ -187,38 +161,49 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 	return
 }
 
-func (self *lbWorker) Run(fn func([]map[string]interface{}, map[string]string) []interface{}) {
-	log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ******************************** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+// func (self *lbWorker) Run(fn func([]map[string]interface{}, map[string]string) []interface{}) {
+func (self *lbWorker) Run(fn func([]interface{}, map[string]interface{}) []interface{}) {
 	for reply := [][]byte{}; ; {
-		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ******************************** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		request := self.recv(reply)
-		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ******************************** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-		log.Printf("WORKER LOOP: %#v", request)
 		if len(request) == 0 {
-			log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! BREAK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			break
 		}
 		// You should code your logic here
-		var instances []map[string]interface{}
+		// var instances []map[string]interface{}
+		var instances []interface{}
 		if err := json.Unmarshal(request[0], &instances); err != nil {
-			log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! FATAL INSTANCES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			log.Fatalln("Bad message: invalid instances")
 			// TODO: Set REPLY and return
 		}
 
-		var args map[string]string
+		var args map[string]interface{}
 		if err := json.Unmarshal(request[1], &args); err != nil {
-			log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! FATAL INSTANCES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 			log.Fatalln("Bad message: invalid args")
 			// TODO: Set REPLY and return
 		}
 
-		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! computedInstances !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-		computedInstances := fn(instances, args)
+		var processInstances func(levels []interface{}, ci *[]interface{}, iteration int) []interface{}
+		processInstances = func(levels []interface{}, ci *[]interface{}, iteration int) []interface{} {
+			levelIteration := 0
+			for _, level := range levels {
+				kind := reflect.TypeOf(level).Kind()
+				if kind == reflect.Slice || kind == reflect.Array {
+					o := make([]interface{}, 0)
+					*ci = append(*ci, processInstances(level.([]interface{}), &o, levelIteration))
+				} else {
+					args["iteration"] = iteration
+					t := fn(levels, args)
+					return t
+				}
+				levelIteration = levelIteration + 1
+			}
+			return *ci
+		}
+		var tmpInstances []interface{}
+		computedInstances := processInstances(instances, &tmpInstances, 0)
 
 		instancesResult, _ := json.Marshal(computedInstances)
 		reply = [][]byte{instancesResult}
-		log.Println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! CONTINUE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 	}
 }
 

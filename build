@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
 # Set REPOSITORY with your repository name
-REPOSITORY=hydra-worker-pong
+REPOSITORY=hydra-worker-map-sort
 
 if [ ! -h src/github.com/innotech/$REPOSITORY ]; then
 	mkdir -p src/github.com/innotech/
