@@ -1,0 +1,11 @@
+Package: hydra-worker-map-sort
+Version: 1-0
+Architecture: all
+Maintainer: innotech
+Installed-Size: 80
+Section: custom
+Priority: extra
+Description: Hydra Worker Map and Sort
+ Map instances by attribute and sort them.
+ .
+
