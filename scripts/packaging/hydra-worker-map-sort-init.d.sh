@@ -16,7 +16,7 @@ if [[ $(echo $DISTRO_INFO | grep 'Debian\|Ubuntu') == "" ]]; then
 	. /etc/rc.d/init.d/functions
 fi
 
-APP_NAME=hydra
+APP_NAME=hydra-worker-map-sort
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 DAEMON=/usr/local/hydra/hydra-worker-map-sort
 DAEMON_ARGS="tcp://127.0.0.1:7801 MapAndSort"
