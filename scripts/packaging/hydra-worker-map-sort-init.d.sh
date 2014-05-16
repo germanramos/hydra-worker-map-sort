@@ -3,7 +3,7 @@
 # Hydra Worker Map and Sort - Startup script for Hydra Worker Map and Sort
 
 # chkconfig: 35 99 15
-# description: Service for application discovery, management and balancing services
+# description: Hydra Worker for map instances by attribute and sort them.
 # processname: hydra-worker-map-sort
 # Default-Start: 2 3 4 5
 # Default-Stop: 0 1 6
@@ -19,7 +19,7 @@ fi
 APP_NAME=hydra
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 DAEMON=/usr/local/hydra/hydra-worker-map-sort
-DAEMON_ARGS="tcp://localhost:7800 MapAndSort"
+DAEMON_ARGS="tcp://127.0.0.1:7801 MapAndSort"
 RUNDIR=/usr/local/hydra
 PID_DIR=/var/run
 PID_NAME=$APP_NAME.pid
