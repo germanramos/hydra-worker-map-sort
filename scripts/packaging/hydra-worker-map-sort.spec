@@ -25,6 +25,5 @@ rm -rf $RPM_BUILD_ROOT
 %post
 echo   When finished, you may want to run \"update-rc.d hydra-worker-map-sort defaults\"
 %files
-%dir /etc/hydra
 /usr/local/hydra/hydra-worker-map-sort
 /etc/init.d/hydra-worker-map-sort
