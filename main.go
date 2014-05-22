@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "encoding/json"
 	"os"
 
 	worker "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib"
@@ -35,7 +34,9 @@ func main() {
 
 		computedInstances := make([]interface{}, 0)
 		for _, mapAttr := range args["mapSort"].(map[string]interface{}) {
-			computedInstances = append(computedInstances, mappedInstances[mapAttr.(string)])
+			if _, ok := mappedInstances[mapAttr.(string)]; ok {
+				computedInstances = append(computedInstances, mappedInstances[mapAttr.(string)])
+			}
 		}
 
 		return computedInstances
