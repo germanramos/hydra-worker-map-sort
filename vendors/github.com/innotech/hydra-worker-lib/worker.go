@@ -2,7 +2,7 @@ package worker
 
 import (
 	"encoding/json"
-	zmq "github.com/innotech/hydra/vendors/github.com/alecthomas/gozmq"
+	zmq "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib/vendors/github.com/alecthomas/gozmq"
 	"log"
 	"reflect"
 	"time"
