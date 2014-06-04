@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	SIGNAL_READY      = "\001"
-	SIGNAL_REQUEST    = "\002"
-	SIGNAL_REPLY      = "\003"
-	SIGNAL_HEARTBEAT  = "\004"
-	SIGNAL_DISCONNECT = "\005"
+	SIGNAL_READY		= "\001"
+	SIGNAL_REQUEST		= "\002"
+	SIGNAL_REPLY		= "\003"
+	SIGNAL_HEARTBEAT	= "\004"
+	SIGNAL_DISCONNECT	= "\005"
 
-	HEARTBEAT_LIVENESS = 3
+	HEARTBEAT_LIVENESS	= 3
 )
 
 type Worker interface {
@@ -27,31 +27,31 @@ type Worker interface {
 }
 
 type lbWorker struct {
-	broker  string // Hydra Load Balancer address
-	context *zmq.Context
-	service string
-	verbose bool
-	worker  *zmq.Socket
+	broker	string	// Hydra Load Balancer address
+	context	*zmq.Context
+	service	string
+	verbose	bool
+	worker	*zmq.Socket
 
-	heartbeat   time.Duration
-	heartbeatAt time.Time
-	liveness    int
-	reconnect   time.Duration
+	heartbeat	time.Duration
+	heartbeatAt	time.Time
+	liveness	int
+	reconnect	time.Duration
 
-	expectReply bool
-	replyTo     []byte
+	expectReply	bool
+	replyTo		[]byte
 }
 
 func NewWorker(broker, service string, verbose bool) Worker {
 	context, _ := zmq.NewContext()
 	self := &lbWorker{
-		broker:    broker,
-		context:   context,
-		service:   service,
-		verbose:   verbose,
-		heartbeat: 2500 * time.Millisecond,
-		liveness:  0,
-		reconnect: 2500 * time.Millisecond,
+		broker:		broker,
+		context:	context,
+		service:	service,
+		verbose:	verbose,
+		heartbeat:	2500 * time.Millisecond,
+		liveness:	0,
+		reconnect:	2500 * time.Millisecond,
 	}
 	self.reconnectToBroker()
 	return self
@@ -115,7 +115,7 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 
 		_, err := zmq.Poll(items, self.heartbeat)
 		if err != nil {
-			panic(err) //  Interrupted
+			panic(err)	//  Interrupted
 		}
 
 		if item := items[0]; item.REvents&zmq.POLLIN != 0 {
@@ -125,7 +125,7 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 			}
 			self.liveness = HEARTBEAT_LIVENESS
 			if len(msg) < 2 {
-				panic("Invalid msg") //  Interrupted
+				panic("Invalid msg")	//  Interrupted
 			}
 
 			switch command := string(msg[1]); command {
@@ -161,15 +161,12 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 	return
 }
 
-// func (self *lbWorker) Run(fn func([]map[string]interface{}, map[string]string) []interface{}) {
 func (self *lbWorker) Run(fn func([]interface{}, map[string]interface{}) []interface{}) {
 	for reply := [][]byte{}; ; {
 		request := self.recv(reply)
 		if len(request) == 0 {
 			break
 		}
-		// You should code your logic here
-		// var instances []map[string]interface{}
 		var instances []interface{}
 		if err := json.Unmarshal(request[0], &instances); err != nil {
 			log.Fatalln("Bad message: invalid instances")
@@ -186,16 +183,18 @@ func (self *lbWorker) Run(fn func([]interface{}, map[string]interface{}) []inter
 		processInstances = func(levels []interface{}, ci *[]interface{}, iteration int) []interface{} {
 			levelIteration := 0
 			for _, level := range levels {
-				kind := reflect.TypeOf(level).Kind()
-				if kind == reflect.Slice || kind == reflect.Array {
-					o := make([]interface{}, 0)
-					*ci = append(*ci, processInstances(level.([]interface{}), &o, levelIteration))
-				} else {
-					args["iteration"] = iteration
-					t := fn(levels, args)
-					return t
+				if level != nil {
+					kind := reflect.TypeOf(level).Kind()
+					if kind == reflect.Slice || kind == reflect.Array {
+						o := make([]interface{}, 0)
+						*ci = append(*ci, processInstances(level.([]interface{}), &o, levelIteration))
+					} else {
+						args["iteration"] = iteration
+						t := fn(levels, args)
+						return t
+					}
+					levelIteration = levelIteration + 1
 				}
-				levelIteration = levelIteration + 1
 			}
 			return *ci
 		}
