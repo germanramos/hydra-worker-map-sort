@@ -19,7 +19,7 @@ fi
 APP_NAME=hydra-worker-map-sort
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 DAEMON=/usr/local/hydra/hydra-worker-map-sort
-DAEMON_ARGS="tcp://127.0.0.1:7801 MapAndSort"
+DAEMON_ARGS="tcp://127.0.0.1:7801 MapSort"
 RUNDIR=/usr/local/hydra
 PID_DIR=/var/run
 PID_NAME=$APP_NAME.pid
