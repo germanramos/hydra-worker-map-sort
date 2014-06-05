@@ -6,6 +6,8 @@ import (
 	worker "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib"
 )
 
+const UNDEFINED_MAP string = "undefined"
+
 func main() {
 	if len(os.Args) < 3 {
 		panic("Invalid number of arguments, you need to add at least the arguments for the server address and the service name")
@@ -21,7 +23,14 @@ func main() {
 		mappedInstances = make(map[string][]interface{})
 		for _, i := range instances {
 			instance := i.(map[string]interface{})
-			key := instance["Info"].(map[string]interface{})[args["mapAttr"].(string)].(string)
+			var key string = UNDEFINED_MAP
+			mapAttr, ok := args["mapAttr"]
+			if ok {
+				keyInterface, ok := instance["Info"].(map[string]interface{})[mapAttr.(string)]
+				if ok {
+					key = keyInterface.(string)
+				}
+			}
 			if len(mappedInstances[key]) == 0 {
 				mappedInstances[key] = make([]interface{}, 0)
 			}
@@ -37,6 +46,9 @@ func main() {
 			if _, ok := mappedInstances[mapAttr.(string)]; ok {
 				computedInstances = append(computedInstances, mappedInstances[mapAttr.(string)])
 			}
+		}
+		if value, ok := mappedInstances[UNDEFINED_MAP]; ok {
+			computedInstances = append(computedInstances, value)
 		}
 
 		return computedInstances
