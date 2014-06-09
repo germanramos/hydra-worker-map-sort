@@ -33,7 +33,8 @@ In apps.json:
 
 ## Configuration example
 ```
-"MapSort": {	
+{
+	"worker": "MapSort",
 	"mapAttr": "cloud",
 	"mapSort": ["google", "amazon", "azure"]
 }
