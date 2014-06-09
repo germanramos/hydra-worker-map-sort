@@ -32,18 +32,18 @@ In apps.json:
   - mapSort: An array with the prefered order. If the order do not match the instance will be put in map at the end of the list
 
 ## Configuration example
-
+```
 "MapSort": {	
-				"mapAttr": "cloud",
-				"mapSort": ["google", "amazon", "azure"]
-			}
-			
-This will map the instance by the attribute "cloud" placing first all the instances with cloud=google, after that all the instances with cloud=amazon, after that all the instances with cloud=azure, and at the end all the other instances. 
+	"mapAttr": "cloud",
+	"mapSort": ["google", "amazon", "azure"]
+}
+```			
+This will map the list of instances by the attribute "cloud" placing first all the instances with cloud=google, after that all the instances with cloud=amazon, after that all the instances with cloud=azure, and at the end all the other instances. 
 
 ## Service configuration
 
 No additional configuration is needed if running in the same machine that Hydra.  
-Tune start file at /etc/init.d/hydra-worker-map-sort if you run in a separate machine
+Tune start file at /etc/init.d/hydra-worker-map-sort if you run it in a separate machine.
 
 # Run
 ```
