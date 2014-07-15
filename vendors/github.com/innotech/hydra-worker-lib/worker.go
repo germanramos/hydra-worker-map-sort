@@ -2,12 +2,19 @@ package worker
 
 import (
 	"encoding/json"
-	zmq "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib/vendors/github.com/alecthomas/gozmq"
+	"flag"
+	"io/ioutil"
 	"log"
+	"os"
 	"reflect"
+	"strconv"
 	"time"
+
 	// DEBUG
 	"fmt"
+
+	zmq "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib/vendors/github.com/alecthomas/gozmq"
+	"github.com/innotech/hydra-worker-pong/vendors/github.com/innotech/hydra-worker-lib/vendors/github.com/BurntSushi/toml"
 )
 
 const (
@@ -17,7 +24,11 @@ const (
 	SIGNAL_HEARTBEAT	= "\004"
 	SIGNAL_DISCONNECT	= "\005"
 
-	HEARTBEAT_LIVENESS	= 3
+	DEFAULT_PRIORITY_LEVEL		= 0	// Local worker
+	DEFAULT_VERBOSE			= false
+	DEFAULT_HEARTBEAT_INTERVAL	= 2600 * time.Millisecond
+	DEFAULT_HEARTBEAT_LIVENESS	= 3
+	DEFAULT_RECONNECT_INTERVAL	= 2500 * time.Millisecond
 )
 
 type Worker interface {
@@ -27,71 +38,151 @@ type Worker interface {
 }
 
 type lbWorker struct {
-	broker	string	// Hydra Load Balancer address
-	context	*zmq.Context
-	service	string
-	verbose	bool
-	worker	*zmq.Socket
+	HydraServerAddr	string	`toml:"hydra_server_address"`	// Hydra Load Balancer address
+	context		*zmq.Context
+	PriorityLevel	int	`toml:"priority_level"`
+	ServiceName	string	`toml:"service_name"`
+	Verbose		bool	`toml:"verbose"`
+	socket		*zmq.Socket
 
-	heartbeat	time.Duration
-	heartbeatAt	time.Time
-	liveness	int
-	reconnect	time.Duration
+	HeartbeatInterval	time.Duration	`toml:"heartbeat_interval"`
+	heartbeatAt		time.Time
+	Liveness		int	`toml:"liveness"`
+	livenessCounter		int
+	ReconnectInterval	time.Duration	`toml:"reconnect_interval"`
 
 	expectReply	bool
 	replyTo		[]byte
 }
 
-func NewWorker(broker, service string, verbose bool) Worker {
+func NewWorker(arguments []string) Worker {
+	self := new(lbWorker)
+
 	context, _ := zmq.NewContext()
-	self := &lbWorker{
-		broker:		broker,
-		context:	context,
-		service:	service,
-		verbose:	verbose,
-		heartbeat:	2500 * time.Millisecond,
-		liveness:	0,
-		reconnect:	2500 * time.Millisecond,
+	self.context = context
+	self.HeartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL
+	self.PriorityLevel = DEFAULT_PRIORITY_LEVEL
+	self.Liveness = DEFAULT_HEARTBEAT_LIVENESS
+	self.ReconnectInterval = DEFAULT_RECONNECT_INTERVAL
+	self.Verbose = DEFAULT_VERBOSE
+
+	if err := self.Load(arguments); err != nil {
+		panic(err.Error())
 	}
+
+	// Validate worker configuration
+	if !self.isValid() {
+		log.Printf("%#v", self)
+		panic("You must set all required configuration options")
+	}
+
+	self.livenessCounter = self.Liveness
 	self.reconnectToBroker()
 	return self
 }
 
-func (self *lbWorker) reconnectToBroker() {
-	if self.worker != nil {
-		self.worker.Close()
+// Load configures hydra-worker, it can be loaded from both
+// custom file or command line arguments and the values extracted from
+// files they can be overriden with the command line arguments.
+func (self *lbWorker) Load(arguments []string) error {
+	var path string
+	f := flag.NewFlagSet("hydra-worker", flag.ContinueOnError)
+	f.SetOutput(ioutil.Discard)
+	f.StringVar(&path, "config", "", "path to config file")
+	f.Parse(arguments[1:])
+
+	if path != "" {
+		// Load from config file specified in arguments.
+		if err := self.loadConfigFile(path); err != nil {
+			return err
+		}
 	}
-	self.worker, _ = self.context.NewSocket(zmq.DEALER)
-	// Pending messages shall be discarded immediately when the socket is closed with Close()
-	self.worker.SetLinger(0)
-	self.worker.Connect(self.broker)
-	if self.verbose {
-		log.Printf("Connecting to broker at %s...\n", self.broker)
+
+	// Load from command line flags.
+	if err := self.loadFlags(arguments); err != nil {
+		return err
 	}
-	self.sendToBroker(SIGNAL_READY, []byte(self.service), nil)
-	self.liveness = HEARTBEAT_LIVENESS
-	self.heartbeatAt = time.Now().Add(self.heartbeat)
+
+	return nil
 }
 
+// LoadFile loads configuration from a file.
+func (self *lbWorker) loadConfigFile(path string) error {
+	_, err := toml.DecodeFile(path, &self)
+	return err
+}
+
+// LoadFlags loads configuration from command line flags.
+func (self *lbWorker) loadFlags(arguments []string) error {
+	var ignoredString string
+
+	f := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	f.SetOutput(ioutil.Discard)
+	f.StringVar(&self.HydraServerAddr, "hydra-server-addr", self.HydraServerAddr, "")
+	f.DurationVar(&self.HeartbeatInterval, "heartbeat-interval", self.HeartbeatInterval, "")
+	f.IntVar(&self.Liveness, "Liveness", self.Liveness, "")
+	f.IntVar(&self.PriorityLevel, "priority-level", self.PriorityLevel, "")
+	f.DurationVar(&self.ReconnectInterval, "reconnect-interval", self.ReconnectInterval, "")
+	f.StringVar(&self.ServiceName, "service-name", self.ServiceName, "")
+	f.BoolVar(&self.Verbose, "v", self.Verbose, "")
+	f.BoolVar(&self.Verbose, "Verbose", self.Verbose, "")
+
+	// BEGIN IGNORED FLAGS
+	f.StringVar(&ignoredString, "config", "", "")
+	// END IGNORED FLAGS
+
+	return nil
+}
+
+func (self *lbWorker) isValid() bool {
+	if self.HydraServerAddr == "" {
+		return false
+	}
+	if self.ServiceName == "" {
+		return false
+	}
+	return true
+}
+
+// reconnectToBroker connects worker to hydra load balancer server (broker)
+func (self *lbWorker) reconnectToBroker() {
+	if self.socket != nil {
+		self.socket.Close()
+	}
+	self.socket, _ = self.context.NewSocket(zmq.DEALER)
+	// Pending messages shall be discarded immediately when the socket is closed with Close()
+	// Set random identity to make tracing easier
+	self.socket.SetLinger(0)
+	self.socket.Connect(self.HydraServerAddr)
+	if self.Verbose {
+		log.Printf("Connecting to broker at %s...\n", self.HydraServerAddr)
+	}
+	self.sendToBroker(SIGNAL_READY, []byte(self.ServiceName), [][]byte{[]byte(strconv.Itoa(self.PriorityLevel))})
+	self.heartbeatAt = time.Now().Add(self.HeartbeatInterval)
+}
+
+// sendToBroker dispatchs messages to hydra load balancer server (broker)
 func (self *lbWorker) sendToBroker(command string, option []byte, msg [][]byte) {
 	if len(option) > 0 {
 		msg = append([][]byte{option}, msg...)
 	}
 
 	msg = append([][]byte{nil, []byte(command)}, msg...)
-	if self.verbose {
+	if self.Verbose {
 		log.Printf("Sending %X to broker\n", command)
 	}
-	self.worker.SendMultipart(msg, 0)
+	self.socket.SendMultipart(msg, 0)
 }
 
+// close
 func (self *lbWorker) close() {
-	if self.worker != nil {
-		self.worker.Close()
+	if self.socket != nil {
+		self.socket.Close()
 	}
 	self.context.Close()
 }
 
+// recv receives messages from hydra load balancer server (broker) and send the responses back
 func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 	//  Format and send the reply if we were provided one
 	if len(reply) == 0 && self.expectReply {
@@ -110,57 +201,61 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 
 	for {
 		items := zmq.PollItems{
-			zmq.PollItem{Socket: self.worker, Events: zmq.POLLIN},
+			zmq.PollItem{Socket: self.socket, Events: zmq.POLLIN},
 		}
 
-		_, err := zmq.Poll(items, self.heartbeat)
+		_, err := zmq.Poll(items, self.HeartbeatInterval)
 		if err != nil {
 			panic(err)	//  Interrupted
 		}
 
 		if item := items[0]; item.REvents&zmq.POLLIN != 0 {
-			msg, _ = self.worker.RecvMultipart(0)
-			if self.verbose {
+			msg, _ = self.socket.RecvMultipart(0)
+			if self.Verbose {
 				log.Println("Received message from broker")
 			}
-			self.liveness = HEARTBEAT_LIVENESS
+			self.livenessCounter = self.Liveness
 			if len(msg) < 2 {
 				panic("Invalid msg")	//  Interrupted
 			}
 
 			switch command := string(msg[1]); command {
 			case SIGNAL_REQUEST:
+				// log.Println("SIGNAL_REQUEST")
 				//  We should pop and save as many addresses as there are
 				//  up to a null part, but for now, just save one...
 				self.replyTo = msg[2]
 				msg = msg[4:6]
 				return
 			case SIGNAL_HEARTBEAT:
+				// log.Println("SIGNAL_HEARTBEAT")
 				// do nothin
 			case SIGNAL_DISCONNECT:
+				// log.Println("SIGNAL_DISCONNECT")
 				self.reconnectToBroker()
 			default:
 				// TODO: catch error
 				log.Println("Invalid input message")
 			}
-		} else if self.liveness--; self.liveness <= 0 {
-			if self.verbose {
+		} else if self.livenessCounter--; self.livenessCounter <= 0 {
+			if self.Verbose {
 				log.Println("Disconnected from broker - retrying...")
 			}
-			time.Sleep(self.reconnect)
+			time.Sleep(self.ReconnectInterval)
 			self.reconnectToBroker()
 		}
 
 		//  Send HEARTBEAT if it's time
 		if self.heartbeatAt.Before(time.Now()) {
 			self.sendToBroker(SIGNAL_HEARTBEAT, nil, nil)
-			self.heartbeatAt = time.Now().Add(self.heartbeat)
+			self.heartbeatAt = time.Now().Add(self.HeartbeatInterval)
 		}
 	}
 
 	return
 }
 
+// Run executes the worker permanently
 func (self *lbWorker) Run(fn func([]interface{}, map[string]interface{}) []interface{}) {
 	for reply := [][]byte{}; ; {
 		request := self.recv(reply)
@@ -206,7 +301,7 @@ func (self *lbWorker) Run(fn func([]interface{}, map[string]interface{}) []inter
 	}
 }
 
-// DEBUG
+// DEBUG: prints the message legibly
 func Dump(msg [][]byte) {
 	for _, part := range msg {
 		isText := true

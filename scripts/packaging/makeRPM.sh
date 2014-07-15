@@ -7,6 +7,7 @@ rm -rf ~/rpmbuild
 rpmdev-setuptree
 
 mkdir ~/rpmbuild/SOURCES/hydra-worker-map-sort-1
+cp ./fixtures/hydra-worker-map-sort.conf  ~/rpmbuild/SOURCES/hydra-worker-map-sort-1
 cp hydra-worker-map-sort-init.d.sh ~/rpmbuild/SOURCES/hydra-worker-map-sort-1
 cp ../../bin/hydra-worker-map-sort ~/rpmbuild/SOURCES/hydra-worker-map-sort-1
 
