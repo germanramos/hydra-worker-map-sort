@@ -13,8 +13,8 @@ import (
 	// DEBUG
 	"fmt"
 
+	"github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib/vendors/github.com/BurntSushi/toml"
 	zmq "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib/vendors/github.com/alecthomas/gozmq"
-	"github.com/innotech/hydra-worker-pong/vendors/github.com/innotech/hydra-worker-lib/vendors/github.com/BurntSushi/toml"
 )
 
 const (
