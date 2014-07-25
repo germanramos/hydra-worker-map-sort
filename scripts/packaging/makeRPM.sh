@@ -14,9 +14,9 @@ cp ../../bin/hydra-worker-map-sort ~/rpmbuild/SOURCES/hydra-worker-map-sort-1
 cp hydra-worker-map-sort.spec ~/rpmbuild/SPECS
 
 pushd ~/rpmbuild/SOURCES/
-tar czf hydra-worker-map-sort-1.0.tar.gz hydra-worker-map-sort-1/
+tar czf hydra-worker-map-sort-1.1.tar.gz hydra-worker-map-sort-1/
 cd ~/rpmbuild 
 rpmbuild -ba SPECS/hydra-worker-map-sort.spec
 
 popd
-cp ~/rpmbuild/RPMS/x86_64/hydra-worker-map-sort-1-0.x86_64.rpm .
+cp ~/rpmbuild/RPMS/x86_64/hydra-worker-map-sort-1-1.x86_64.rpm .
