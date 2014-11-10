@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strconv"
 
 	worker "github.com/innotech/hydra-worker-map-sort/vendors/github.com/innotech/hydra-worker-lib"
 )
@@ -34,10 +35,17 @@ func main() {
 			}
 		}
 
+		mapSortValues := args["mapSort"].(map[string]interface{})
+		mapSort := make([]string, len(mapSortValues), len(mapSortValues))
+		for i, value := range mapSortValues {
+			index, _ := strconv.Atoi(i)
+			mapSort[index] = value.(string)
+		}
+
 		computedInstances := make([]interface{}, 0)
-		for _, mapAttr := range args["mapSort"].(map[string]interface{}) {
-			if _, ok := mappedInstances[mapAttr.(string)]; ok {
-				computedInstances = append(computedInstances, mappedInstances[mapAttr.(string)])
+		for _, mapAttr := range mapSort {
+			if _, ok := mappedInstances[mapAttr]; ok {
+				computedInstances = append(computedInstances, mappedInstances[mapAttr])
 			}
 		}
 		if value, ok := mappedInstances[UNDEFINED_MAP]; ok {

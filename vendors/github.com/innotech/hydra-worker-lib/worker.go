@@ -18,17 +18,17 @@ import (
 )
 
 const (
-	SIGNAL_READY		= "\001"
-	SIGNAL_REQUEST		= "\002"
-	SIGNAL_REPLY		= "\003"
-	SIGNAL_HEARTBEAT	= "\004"
-	SIGNAL_DISCONNECT	= "\005"
+	SIGNAL_READY      = "\001"
+	SIGNAL_REQUEST    = "\002"
+	SIGNAL_REPLY      = "\003"
+	SIGNAL_HEARTBEAT  = "\004"
+	SIGNAL_DISCONNECT = "\005"
 
-	DEFAULT_PRIORITY_LEVEL		= 0	// Local worker
-	DEFAULT_VERBOSE			= false
-	DEFAULT_HEARTBEAT_INTERVAL	= 2600 * time.Millisecond
-	DEFAULT_HEARTBEAT_LIVENESS	= 3
-	DEFAULT_RECONNECT_INTERVAL	= 2500 * time.Millisecond
+	DEFAULT_PRIORITY_LEVEL     = 0 // Local worker
+	DEFAULT_VERBOSE            = false
+	DEFAULT_HEARTBEAT_INTERVAL = 2600 * time.Millisecond
+	DEFAULT_HEARTBEAT_LIVENESS = 3
+	DEFAULT_RECONNECT_INTERVAL = 2500 * time.Millisecond
 )
 
 type Worker interface {
@@ -38,21 +38,21 @@ type Worker interface {
 }
 
 type lbWorker struct {
-	HydraServerAddr	string	`toml:"hydra_server_address"`	// Hydra Load Balancer address
-	context		*zmq.Context
-	PriorityLevel	int	`toml:"priority_level"`
-	ServiceName	string	`toml:"service_name"`
-	Verbose		bool	`toml:"verbose"`
-	socket		*zmq.Socket
+	HydraServerAddr string `toml:"hydra_server_address"` // Hydra Load Balancer address
+	context         *zmq.Context
+	PriorityLevel   int    `toml:"priority_level"`
+	ServiceName     string `toml:"service_name"`
+	Verbose         bool   `toml:"verbose"`
+	socket          *zmq.Socket
 
-	HeartbeatInterval	time.Duration	`toml:"heartbeat_interval"`
-	heartbeatAt		time.Time
-	Liveness		int	`toml:"liveness"`
-	livenessCounter		int
-	ReconnectInterval	time.Duration	`toml:"reconnect_interval"`
+	HeartbeatInterval time.Duration `toml:"heartbeat_interval"`
+	heartbeatAt       time.Time
+	Liveness          int `toml:"liveness"`
+	livenessCounter   int
+	ReconnectInterval time.Duration `toml:"reconnect_interval"`
 
-	expectReply	bool
-	replyTo		[]byte
+	expectReply bool
+	replyTo     []byte
 }
 
 func NewWorker(arguments []string) Worker {
@@ -206,7 +206,7 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 
 		_, err := zmq.Poll(items, self.HeartbeatInterval)
 		if err != nil {
-			panic(err)	//  Interrupted
+			panic(err) //  Interrupted
 		}
 
 		if item := items[0]; item.REvents&zmq.POLLIN != 0 {
@@ -216,7 +216,7 @@ func (self *lbWorker) recv(reply [][]byte) (msg [][]byte) {
 			}
 			self.livenessCounter = self.Liveness
 			if len(msg) < 2 {
-				panic("Invalid msg")	//  Interrupted
+				panic("Invalid msg") //  Interrupted
 			}
 
 			switch command := string(msg[1]); command {
